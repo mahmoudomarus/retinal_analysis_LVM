@@ -9,7 +9,7 @@ import sys
 from model import RetinalAnalysisModel
 from visualization import RetinalVisualizer
 from logger import RetinalLogger
-from dr_dataset import get_transforms
+from transforms import get_transforms
 import pandas as pd
 
 class RetinalAnalysisApp:
@@ -29,10 +29,8 @@ class RetinalAnalysisApp:
         # Check for Kaggle credentials
         if 'kaggle' in st.secrets:
             st.sidebar.success("✅ Kaggle credentials found")
-            # Only set environment variables if needed
-            if not os.environ.get('KAGGLE_USERNAME'):
-                os.environ['KAGGLE_USERNAME'] = st.secrets.kaggle.username
-                os.environ['KAGGLE_KEY'] = st.secrets.kaggle.key
+            os.environ['KAGGLE_USERNAME'] = st.secrets.kaggle.username
+            os.environ['KAGGLE_KEY'] = st.secrets.kaggle.key
         else:
             st.sidebar.warning("⚠️ Kaggle credentials not found")
         
