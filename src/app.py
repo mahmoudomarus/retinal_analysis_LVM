@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import json
 import sys
+import requests
 from model import RetinalAnalysisModel
 from visualization import RetinalVisualizer
 from logger import RetinalLogger
@@ -33,6 +34,30 @@ class RetinalAnalysisApp:
             os.environ['KAGGLE_KEY'] = st.secrets.kaggle.key
         else:
             st.sidebar.warning("⚠️ Kaggle credentials not found")
+    
+    def load_sample_image(self):
+        """Load a sample retinal image for testing"""
+        try:
+            # Sample image URLs
+            sample_images = {
+                "Normal Retina": "https://www.kaggle.com/tanlikesmath/diabetic-retinopathy-resized/download/10_left.jpeg",
+                "Mild DR": "https://www.kaggle.com/tanlikesmath/diabetic-retinopathy-resized/download/14_right.jpeg",
+                "Severe DR": "https://www.kaggle.com/tanlikesmath/diabetic-retinopathy-resized/download/16_left.jpeg"
+            }
+            
+            # Let user select a sample
+            selected_sample = st.selectbox(
+                "Or try a sample image:",
+                ["Select a sample..."] + list(sample_images.keys())
+            )
+            
+            if selected_sample != "Select a sample...":
+                return Image.open(requests.get(sample_images[selected_sample], stream=True).raw)
+            return None
+            
+        except Exception as e:
+            st.warning("Unable to load sample images. Please upload your own image.")
+            return None
         
     def load_model(self):
         """Load the pretrained model"""
@@ -87,7 +112,13 @@ class RetinalAnalysisApp:
             st.subheader("DR Classification")
             dr_stages = ['No DR', 'Mild', 'Moderate', 'Severe', 'Proliferative']
             pred_class = predictions['predicted_class'].item()
-            st.write(f"Predicted Stage: {dr_stages[pred_class]}")
+            
+            # Use colors for different stages
+            stage_colors = ['green', 'yellow', 'orange', 'red', 'darkred']
+            st.markdown(
+                f'<h3 style="color: {stage_colors[pred_class]};">Predicted Stage: {dr_stages[pred_class]}</h3>',
+                unsafe_allow_html=True
+            )
             
             # Display probabilities
             probs = predictions['class_probabilities'][0]
@@ -111,6 +142,14 @@ class RetinalAnalysisApp:
                 'vessel_abnormality': predictions['vessel_abnormality'].item()
             })
             st.plotly_chart(vessel_fig)
+            
+            # Additional analysis details
+            with st.expander("Detailed Analysis"):
+                st.write({
+                    'Vessel Thickness': f"{predictions['vessel_thickness'].item():.2f}",
+                    'Vessel Tortuosity': f"{predictions['vessel_tortuosity'].item():.2f}",
+                    'Abnormality Score': f"{predictions['vessel_abnormality'].item():.2f}"
+                })
     
     def run(self):
         """Run the Streamlit app"""
@@ -119,7 +158,7 @@ class RetinalAnalysisApp:
         # Add app description
         st.markdown("""
         This application analyzes retinal images for signs of diabetic retinopathy using deep learning.
-        Upload a retinal image to get started.
+        Upload a retinal image or try one of our samples to get started.
         """)
         
         # System information in sidebar
@@ -131,25 +170,25 @@ class RetinalAnalysisApp:
                 'Kaggle Auth': 'Configured' if 'KAGGLE_USERNAME' in os.environ else 'Not Configured'
             })
         
-        # File uploader
+        # File uploader and sample selector
         uploaded_file = st.file_uploader("Choose a retinal image...", type=['jpg', 'jpeg', 'png'])
+        sample_image = self.load_sample_image()
         
+        # Process image (either uploaded or sample)
+        image = None
         if uploaded_file is not None:
-            try:
-                # Load and display image
-                image = Image.open(uploaded_file).convert('RGB')
-                
-                # Analyze image
-                if st.button("Analyze Image"):
-                    with st.spinner("Analyzing..."):
-                        predictions, attention_maps = self.analyze_image(image)
-                        if predictions is not None:
-                            self.display_results(image, predictions, attention_maps)
+            image = Image.open(uploaded_file).convert('RGB')
+        elif sample_image is not None:
+            image = sample_image
+            
+        if image is not None:
+            # Analyze image
+            if st.button("Analyze Image"):
+                with st.spinner("Analyzing..."):
+                    predictions, attention_maps = self.analyze_image(image)
+                    if predictions is not None:
+                        self.display_results(image, predictions, attention_maps)
                             
-            except Exception as e:
-                st.error(f"Error processing image: {str(e)}")
-                st.sidebar.error(f"Detailed error: {str(e)}")
-
 if __name__ == "__main__":
     app = RetinalAnalysisApp()
     app.run()
